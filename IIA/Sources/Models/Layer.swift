@@ -36,13 +36,13 @@ struct Layer: Identifiable, Codable {
             version += 1
         }
     }
-
+    
     // Codable 用のカスタムキー
     enum CodingKeys: String, CodingKey {
         case id, name, isVisible, opacity, drawingData, version
     }
     
-    // Codable の実装（バージョンがない古いデータに対応）
+    // バージョンがない古いデータに対応するためのカスタムデコーダー
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(UUID.self, forKey: .id)
@@ -51,5 +51,16 @@ struct Layer: Identifiable, Codable {
         opacity = try container.decode(Double.self, forKey: .opacity)
         drawingData = try container.decode(Data.self, forKey: .drawingData)
         version = try container.decodeIfPresent(Int.self, forKey: .version) ?? 0
+    }
+    
+    // エンコーダー
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(name, forKey: .name)
+        try container.encode(isVisible, forKey: .isVisible)
+        try container.encode(opacity, forKey: .opacity)
+        try container.encode(drawingData, forKey: .drawingData)
+        try container.encode(version, forKey: .version)
     }
 }
