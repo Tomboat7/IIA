@@ -1,6 +1,9 @@
 import Foundation
 import PencilKit
 
+// MARK: - Future Improvements
+// TODO: テストコードの追加 - Codable 実装、エッジケース（空レイヤ、境界値）のユニットテスト
+
 /// レイヤを表すモデル
 /// 各レイヤは描画内容と表示状態を持つ
 struct Layer: Identifiable, Codable {
@@ -27,8 +30,16 @@ struct Layer: Identifiable, Codable {
     }
 
     /// PKDrawing を取得
+    /// Note: デコードに失敗した場合は空のPKDrawingを返し、エラーログを出力
     var drawing: PKDrawing {
-        (try? PKDrawing(data: drawingData)) ?? PKDrawing()
+        do {
+            return try PKDrawing(data: drawingData)
+        } catch {
+            #if DEBUG
+            print("[Layer] PKDrawing decode failed for layer '\(name)': \(error.localizedDescription)")
+            #endif
+            return PKDrawing()
+        }
     }
     
     /// 描画データを更新し、バージョンをインクリメントする

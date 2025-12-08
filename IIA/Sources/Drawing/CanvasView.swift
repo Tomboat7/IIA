@@ -3,6 +3,17 @@ import PencilKit
 
 /// PencilKit の PKCanvasView を SwiftUI でラップしたビュー
 struct CanvasView: UIViewRepresentable {
+    // MARK: - Constants
+
+    /// 最小ズームスケール
+    private static let minZoomScale: CGFloat = 0.5
+    /// 最大ズームスケール
+    private static let maxZoomScale: CGFloat = 5.0
+    /// 描画変更のデバウンス遅延（秒）
+    private static let drawingDebounceDelay: TimeInterval = 0.1
+
+    // MARK: - Properties
+
     @ObservedObject var document: IllustrationDocument
     @ObservedObject var brushSettings: BrushSettings
     @Binding var isUsingEraser: Bool
@@ -15,8 +26,8 @@ struct CanvasView: UIViewRepresentable {
         canvasView.delegate = context.coordinator
         canvasView.backgroundColor = UIColor(document.backgroundColor)
         canvasView.drawingPolicy = .anyInput // Apple Pencil と指の両方を許可
-        canvasView.minimumZoomScale = 0.5
-        canvasView.maximumZoomScale = 5.0
+        canvasView.minimumZoomScale = Self.minZoomScale
+        canvasView.maximumZoomScale = Self.maxZoomScale
         canvasView.isOpaque = false
 
         // 初期ツールを設定
@@ -83,7 +94,7 @@ struct CanvasView: UIViewRepresentable {
                 self.parent.onDrawingChanged?(drawing)
             }
             drawingChangedWorkItem = workItem
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1, execute: workItem)
+            DispatchQueue.main.asyncAfter(deadline: .now() + CanvasView.drawingDebounceDelay, execute: workItem)
         }
 
         func canvasViewDidBeginUsingTool(_ canvasView: PKCanvasView) {

@@ -1,6 +1,10 @@
 import SwiftUI
 import PencilKit
 
+// MARK: - Future Improvements
+// TODO: 大規模リファクタリング時にサブビューを別ファイルに分割（ExportSheet.swift等）
+// Note: UI要素のサイズ（padding、corner radius等）はApple HIGに沿った標準値のため定数化せず維持
+
 /// キャンバス画面（メインの描画画面）
 /// UX_Design.md に従い、横画面時は左にツールバー、下にフッター＆レイヤパネル
 struct CanvasScreen: View {
@@ -219,7 +223,8 @@ struct LayerImageView: View {
     let layer: Layer
     let canvasSize: CGSize
     @StateObject private var cache: LayerImageCache
-    
+    @State private var currentSize: CGSize = .zero
+
     init(layer: Layer, canvasSize: CGSize) {
         self.layer = layer
         self.canvasSize = canvasSize
@@ -239,20 +244,22 @@ struct LayerImageView: View {
             }
         }
         .onPreferenceChange(SizePreferenceKey.self) { size in
+            currentSize = size
             cache.updateIfNeeded(layer: layer, size: size)
         }
         .onChange(of: layer.version) { _ in
-            // Trigger update when layer version changes
+            // レイヤのバージョンが変わったらキャッシュを強制更新
+            cache.updateIfNeeded(layer: layer, size: currentSize)
         }
     }
 }
 
-private struct SizePreferenceKey: PreferenceKey {
+/// PreferenceKey for passing geometry size
+struct SizePreferenceKey: PreferenceKey {
     static var defaultValue: CGSize = .zero
     static func reduce(value: inout CGSize, nextValue: () -> CGSize) {
         value = nextValue()
     }
-}
 }
 
 /// レイヤ画像のキャッシュ管理
