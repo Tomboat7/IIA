@@ -164,13 +164,15 @@ struct LayerRow: View {
     }
 }
 
-/// レイヤサムネイル
+/// レイヤサムネイル（キャッシュ機能付き）
 struct LayerThumbnail: View {
     let layer: Layer
+    @State private var cachedImage: UIImage?
+    @State private var cachedVersion: Int = -1
 
     var body: some View {
         GeometryReader { geometry in
-            if let image = renderThumbnail(size: geometry.size) {
+            if let image = getThumbnail(size: geometry.size) {
                 Image(uiImage: image)
                     .resizable()
                     .aspectRatio(contentMode: .fit)
@@ -184,6 +186,19 @@ struct LayerThumbnail: View {
                 .stroke(Color.gray.opacity(0.3), lineWidth: 1)
         )
         .opacity(layer.isVisible ? layer.opacity : 0.5)
+    }
+
+    private func getThumbnail(size: CGSize) -> UIImage? {
+        // バージョンが変わっていない場合はキャッシュを使用
+        if cachedVersion == layer.version, let cached = cachedImage {
+            return cached
+        }
+        
+        // サムネイルを生成
+        let thumbnail = renderThumbnail(size: size)
+        cachedImage = thumbnail
+        cachedVersion = layer.version
+        return thumbnail
     }
 
     private func renderThumbnail(size: CGSize) -> UIImage? {

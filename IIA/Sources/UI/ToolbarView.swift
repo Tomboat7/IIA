@@ -6,35 +6,89 @@ enum SelectedTool: Equatable {
     case eraser
 }
 
-/// 縦方向のツールバー（横画面時は左側、縦画面時は上部に配置）
+/// ツールバー（縦方向・横方向に対応）
 struct ToolbarView: View {
     @ObservedObject var brushSettings: BrushSettings
     @ObservedObject var document: IllustrationDocument
     @Binding var selectedTool: SelectedTool
+    var axis: Axis = .vertical // 配置方向
     @State private var showColorPicker = false
     @State private var showBrushSettings = false
+    
+    enum Axis {
+        case vertical
+        case horizontal
+    }
 
     var body: some View {
+        Group {
+            if axis == .vertical {
+                verticalLayout
+            } else {
+                horizontalLayout
+            }
+        }
+    }
+    
+    private var verticalLayout: some View {
         VStack(spacing: 12) {
-            // ブラシ
-            ToolButton(
-                systemName: "paintbrush.pointed.fill",
-                isSelected: selectedTool == .brush,
-                action: { selectedTool = .brush }
-            )
+            toolButtons
+        }
+        .padding(.vertical, 16)
+        .padding(.horizontal, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color(.systemBackground))
+                .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+        )
+    }
+    
+    private var horizontalLayout: some View {
+        HStack(spacing: 12) {
+            toolButtons
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(
+            Color(.systemBackground)
+                .shadow(color: .black.opacity(0.1), radius: 2, y: 2)
+        )
+    }
+    
+    @ViewBuilder
+    private var toolButtons: some View {
+        // ブラシ
+        ToolButton(
+            systemName: "paintbrush.pointed.fill",
+            isSelected: selectedTool == .brush,
+            action: { selectedTool = .brush }
+        )
 
-            // 消しゴム
-            ToolButton(
-                systemName: "eraser.fill",
-                isSelected: selectedTool == .eraser,
-                action: { selectedTool = .eraser }
-            )
+        // 消しゴム
+        ToolButton(
+            systemName: "eraser.fill",
+            isSelected: selectedTool == .eraser,
+            action: { selectedTool = .eraser }
+        )
 
+        if axis == .vertical {
             Divider()
                 .frame(width: 30)
                 .background(Color.gray.opacity(0.5))
+        } else {
+            Divider()
+                .frame(height: 30)
+                .background(Color.gray.opacity(0.5))
+        }
 
-            // カラーピッカー
+        // カラーピッカー
+        if axis == .horizontal {
+            // 横向きの場合はColorPickerを直接表示
+            ColorPicker("", selection: $brushSettings.color)
+                .labelsHidden()
+                .frame(width: 32, height: 32)
+        } else {
+            // 縦向きの場合はCircleボタン
             Button(action: { showColorPicker = true }) {
                 Circle()
                     .fill(brushSettings.color)
@@ -48,7 +102,7 @@ struct ToolbarView: View {
                 ColorPickerPopover(selectedColor: $brushSettings.color)
             }
 
-            // ブラシ設定
+            // ブラシ設定（縦向きのみ）
             ToolButton(
                 systemName: "slider.horizontal.3",
                 isSelected: showBrushSettings,
@@ -57,31 +111,24 @@ struct ToolbarView: View {
             .popover(isPresented: $showBrushSettings) {
                 BrushSettingsPopover(brushSettings: brushSettings)
             }
-
-            Spacer()
-
-            // Undo
-            ToolButton(
-                systemName: "arrow.uturn.backward",
-                isSelected: false,
-                isEnabled: document.canUndo,
-                action: { document.undo() }
-            )
-
-            // Redo
-            ToolButton(
-                systemName: "arrow.uturn.forward",
-                isSelected: false,
-                isEnabled: document.canRedo,
-                action: { document.redo() }
-            )
         }
-        .padding(.vertical, 16)
-        .padding(.horizontal, 8)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color(.systemBackground))
-                .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+
+        Spacer()
+
+        // Undo
+        ToolButton(
+            systemName: "arrow.uturn.backward",
+            isSelected: false,
+            isEnabled: document.canUndo,
+            action: { document.undo() }
+        )
+
+        // Redo
+        ToolButton(
+            systemName: "arrow.uturn.forward",
+            isSelected: false,
+            isEnabled: document.canRedo,
+            action: { document.redo() }
         )
     }
 }

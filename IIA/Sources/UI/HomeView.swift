@@ -160,40 +160,18 @@ struct RecentDocumentCard: View {
 /// ドキュメントサムネイル
 struct DocumentThumbnail: View {
     let document: IllustrationDocument
+    @EnvironmentObject var documentManager: DocumentManager
 
     var body: some View {
-        GeometryReader { geometry in
-            ZStack {
-                // 背景色
-                Rectangle()
-                    .fill(document.backgroundColor)
-
-                // 各レイヤを合成して表示
-                ForEach(document.layers.filter { $0.isVisible }) { layer in
-                    if let image = renderLayerThumbnail(layer: layer, size: geometry.size) {
-                        Image(uiImage: image)
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .opacity(layer.opacity)
-                    }
-                }
-            }
+        if let thumbnail = documentManager.generateThumbnail(for: document) {
+            Image(uiImage: thumbnail)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+        } else {
+            // サムネイル生成に失敗した場合は背景色のみ表示
+            Rectangle()
+                .fill(document.backgroundColor)
         }
-    }
-
-    private func renderLayerThumbnail(layer: Layer, size: CGSize) -> UIImage? {
-        let drawing = layer.drawing
-        guard !drawing.bounds.isEmpty else { return nil }
-
-        let scale = min(
-            size.width / document.canvasSize.width,
-            size.height / document.canvasSize.height
-        )
-
-        return drawing.image(
-            from: CGRect(origin: .zero, size: document.canvasSize),
-            scale: scale
-        )
     }
 }
 
@@ -260,8 +238,8 @@ struct CanvasSizeSelectionSheet: View {
                         }
                     }
                     .disabled(
-                        Double(customWidth) == nil ||
-                        Double(customHeight) == nil
+                        (Double(customWidth) ?? 0) <= 0 ||
+                        (Double(customHeight) ?? 0) <= 0
                     )
                 }
             }

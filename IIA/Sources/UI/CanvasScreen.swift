@@ -122,48 +122,11 @@ struct CanvasScreen: View {
             // メイン領域
             VStack(spacing: 0) {
                 // 上部: ツールバー（横向きに配置）
-                HStack(spacing: 12) {
-                    // ブラシ
-                    ToolButton(
-                        systemName: "paintbrush.pointed.fill",
-                        isSelected: selectedTool == .brush,
-                        action: { selectedTool = .brush }
-                    )
-
-                    // 消しゴム
-                    ToolButton(
-                        systemName: "eraser.fill",
-                        isSelected: selectedTool == .eraser,
-                        action: { selectedTool = .eraser }
-                    )
-
-                    Divider().frame(height: 30)
-
-                    // カラー
-                    ColorPicker("", selection: $brushSettings.color)
-                        .labelsHidden()
-                        .frame(width: 32, height: 32)
-
-                    Spacer()
-
-                    // Undo/Redo
-                    ToolButton(
-                        systemName: "arrow.uturn.backward",
-                        isEnabled: document.canUndo,
-                        action: { document.undo() }
-                    )
-
-                    ToolButton(
-                        systemName: "arrow.uturn.forward",
-                        isEnabled: document.canRedo,
-                        action: { document.redo() }
-                    )
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(
-                    Color(.systemBackground)
-                        .shadow(color: .black.opacity(0.1), radius: 2, y: 2)
+                ToolbarView(
+                    brushSettings: brushSettings,
+                    document: document,
+                    selectedTool: $selectedTool,
+                    axis: .horizontal
                 )
 
                 // キャンバス
@@ -251,19 +214,34 @@ struct CanvasScreen: View {
     }
 }
 
-/// レイヤを画像として表示するビュー
+/// レイヤを画像として表示するビュー（キャッシュ機能付き）
 struct LayerImageView: View {
     let layer: Layer
     let canvasSize: CGSize
+    @State private var cachedImage: UIImage?
+    @State private var cachedVersion: Int = -1
 
     var body: some View {
         GeometryReader { geometry in
-            if let image = renderImage(size: geometry.size) {
+            if let image = getImage(size: geometry.size) {
                 Image(uiImage: image)
                     .resizable()
                     .aspectRatio(contentMode: .fit)
             }
         }
+    }
+
+    private func getImage(size: CGSize) -> UIImage? {
+        // バージョンが変わっていない場合はキャッシュを使用
+        if cachedVersion == layer.version, let cached = cachedImage {
+            return cached
+        }
+        
+        // 画像を生成
+        let image = renderImage(size: size)
+        cachedImage = image
+        cachedVersion = layer.version
+        return image
     }
 
     private func renderImage(size: CGSize) -> UIImage? {
@@ -286,6 +264,7 @@ struct LayerImageView: View {
 struct ExportSheet: View {
     let document: IllustrationDocument
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject var documentManager: DocumentManager
     @State private var exportFormat: ExportFormat = .png
     @State private var includeBackground = true
     @State private var showShareSheet = false
@@ -346,31 +325,8 @@ struct ExportSheet: View {
     }
 
     private func exportImage() {
-        let renderer = UIGraphicsImageRenderer(size: document.canvasSize)
-
-        let image = renderer.image { context in
-            // 背景
-            if includeBackground {
-                UIColor(document.backgroundColor).setFill()
-                context.fill(CGRect(origin: .zero, size: document.canvasSize))
-            }
-
-            // 各レイヤを描画
-            for layer in document.layers where layer.isVisible {
-                let drawing = layer.drawing
-                let layerImage = drawing.image(
-                    from: CGRect(origin: .zero, size: document.canvasSize),
-                    scale: 1.0
-                )
-                layerImage.draw(
-                    in: CGRect(origin: .zero, size: document.canvasSize),
-                    blendMode: .normal,
-                    alpha: CGFloat(layer.opacity)
-                )
-            }
-        }
-
-        exportedImage = image
+        // DocumentManager のエクスポート機能を使用
+        exportedImage = documentManager.exportAsUIImage(document: document, includeBackground: includeBackground)
         showShareSheet = true
     }
 }
