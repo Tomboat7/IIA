@@ -15,8 +15,13 @@ class IllustrationDocument: ObservableObject, Identifiable, Codable {
     @Published var updatedAt: Date
 
     // Undo/Redo 管理
-    private var undoStack: [[Layer]] = []
-    private var redoStack: [[Layer]] = []
+    private struct DocumentState {
+        let layers: [Layer]
+        let activeLayerIndex: Int
+    }
+
+    private var undoStack: [DocumentState] = []
+    private var redoStack: [DocumentState] = []
     private let maxUndoCount = 50
 
     init(
@@ -130,7 +135,7 @@ class IllustrationDocument: ObservableObject, Identifiable, Codable {
 
     /// 現在の状態を Undo スタックに保存
     func saveUndoState() {
-        undoStack.append(layers)
+        undoStack.append(DocumentState(layers: layers, activeLayerIndex: activeLayerIndex))
         if undoStack.count > maxUndoCount {
             undoStack.removeFirst()
         }
@@ -140,22 +145,18 @@ class IllustrationDocument: ObservableObject, Identifiable, Codable {
     /// Undo を実行
     func undo() {
         guard let previousState = undoStack.popLast() else { return }
-        redoStack.append(layers)
-        layers = previousState
-        if activeLayerIndex >= layers.count {
-            activeLayerIndex = max(0, layers.count - 1)
-        }
+        redoStack.append(DocumentState(layers: layers, activeLayerIndex: activeLayerIndex))
+        layers = previousState.layers
+        activeLayerIndex = min(max(0, previousState.activeLayerIndex), max(0, layers.count - 1))
         updatedAt = Date()
     }
 
     /// Redo を実行
     func redo() {
         guard let nextState = redoStack.popLast() else { return }
-        undoStack.append(layers)
-        layers = nextState
-        if activeLayerIndex >= layers.count {
-            activeLayerIndex = max(0, layers.count - 1)
-        }
+        undoStack.append(DocumentState(layers: layers, activeLayerIndex: activeLayerIndex))
+        layers = nextState.layers
+        activeLayerIndex = min(max(0, nextState.activeLayerIndex), max(0, layers.count - 1))
         updatedAt = Date()
     }
 
