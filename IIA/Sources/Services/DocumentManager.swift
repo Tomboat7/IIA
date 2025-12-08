@@ -9,8 +9,8 @@ class DocumentManager: NSObject, ObservableObject {
     private let documentsDirectory: URL
     private var saveToPhotoLibraryCompletion: ((Bool, Error?) -> Void)?
     
-    // サムネイルキャッシュ
-    private var thumbnailCache: [UUID: UIImage] = [:]
+    // サムネイルキャッシュ (NSCache で自動的にメモリ管理)
+    private let thumbnailCache = NSCache<NSString, UIImage>()
     private let thumbnailSize = CGSize(width: 120, height: 120)
 
     override init() {
@@ -234,8 +234,10 @@ class DocumentManager: NSObject, ObservableObject {
     
     /// ドキュメントのサムネイルを生成（キャッシュあり）
     func generateThumbnail(for document: IllustrationDocument) -> UIImage? {
+        let cacheKey = document.id.uuidString as NSString
+        
         // キャッシュをチェック
-        if let cached = thumbnailCache[document.id] {
+        if let cached = thumbnailCache.object(forKey: cacheKey) {
             return cached
         }
         
@@ -271,12 +273,12 @@ class DocumentManager: NSObject, ObservableObject {
         }
         
         // キャッシュに保存
-        thumbnailCache[document.id] = thumbnail
+        thumbnailCache.setObject(thumbnail, forKey: cacheKey)
         return thumbnail
     }
     
     /// サムネイルキャッシュを無効化
     func invalidateThumbnail(for documentId: UUID) {
-        thumbnailCache.removeValue(forKey: documentId)
+        thumbnailCache.removeObject(forKey: documentId.uuidString as NSString)
     }
 }

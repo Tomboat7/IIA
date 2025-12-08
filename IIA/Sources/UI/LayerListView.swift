@@ -164,12 +164,17 @@ struct LayerRow: View {
 /// レイヤサムネイル（キャッシュ機能付き）
 struct LayerThumbnail: View {
     let layer: Layer
-    @State private var cachedImage: UIImage?
-    @State private var cachedVersion: Int = -1
+    @StateObject private var cache: ThumbnailCache
+    
+    init(layer: Layer) {
+        self.layer = layer
+        _cache = StateObject(wrappedValue: ThumbnailCache(layer: layer))
+    }
 
     var body: some View {
         GeometryReader { geometry in
-            if let image = getThumbnail(size: geometry.size) {
+            let _ = cache.updateIfNeeded(layer: layer, size: geometry.size)
+            if let image = cache.cachedImage {
                 Image(uiImage: image)
                     .resizable()
                     .aspectRatio(contentMode: .fit)
@@ -184,31 +189,35 @@ struct LayerThumbnail: View {
         )
         .opacity(layer.isVisible ? layer.opacity : 0.5)
     }
+}
 
-    private func getThumbnail(size: CGSize) -> UIImage? {
-        // バージョンが変わっていない場合はキャッシュを使用
-        if cachedVersion == layer.version, let cached = cachedImage {
-            return cached
-        }
-        
-        // サムネイルを生成
-        let thumbnail = renderThumbnail(size: size)
-        cachedImage = thumbnail
-        cachedVersion = layer.version
-        return thumbnail
+/// レイヤサムネイルのキャッシュ管理
+private class ThumbnailCache: ObservableObject {
+    @Published var cachedImage: UIImage?
+    private var cachedVersion: Int = -1
+    private var lastSize: CGSize = .zero
+    
+    init(layer: Layer) {
+        // 初期化時に最初のバージョンを記録
+        self.cachedVersion = layer.version
     }
-
-    private func renderThumbnail(size: CGSize) -> UIImage? {
+    
+    func updateIfNeeded(layer: Layer, size: CGSize) {
+        // バージョンまたはサイズが変わった場合のみ更新
+        guard cachedVersion != layer.version || lastSize != size else { return }
+        
+        cachedImage = renderThumbnail(layer: layer, size: size)
+        cachedVersion = layer.version
+        lastSize = size
+    }
+    
+    private func renderThumbnail(layer: Layer, size: CGSize) -> UIImage? {
         let drawing = layer.drawing
         guard !drawing.bounds.isEmpty else { return nil }
 
         let scale = min(
             size.width / drawing.bounds.width,
             size.height / drawing.bounds.height
-        )
-        let thumbnailSize = CGSize(
-            width: drawing.bounds.width * scale,
-            height: drawing.bounds.height * scale
         )
 
         return drawing.image(from: drawing.bounds, scale: scale)
