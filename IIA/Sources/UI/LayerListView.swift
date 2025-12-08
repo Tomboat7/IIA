@@ -39,17 +39,18 @@ struct LayerListView: View {
                 // レイヤリスト
                 ScrollView {
                     LazyVStack(spacing: 2) {
-                        ForEach(Array(document.layers.enumerated().reversed()), id: \.element.id) { index, layer in
+                        ForEach(Array(document.layers.enumerated().reversed()), id: \.element.id) { reversedIndex, layer in
+                            let actualIndex = document.layers.count - 1 - reversedIndex
                             LayerRow(
-                                layer: binding(for: index),
-                                isActive: document.activeLayerIndex == index,
+                                layer: binding(for: actualIndex),
+                                isActive: document.activeLayerIndex == actualIndex,
                                 isEditing: editingLayerId == layer.id,
                                 editingName: $editingName,
                                 onSelect: {
-                                    document.activeLayerIndex = index
+                                    document.activeLayerIndex = actualIndex
                                 },
                                 onToggleVisibility: {
-                                    document.layers[index].isVisible.toggle()
+                                    document.layers[actualIndex].isVisible.toggle()
                                 },
                                 onStartEditing: {
                                     editingLayerId = layer.id
@@ -57,12 +58,12 @@ struct LayerListView: View {
                                 },
                                 onEndEditing: {
                                     if !editingName.isEmpty {
-                                        document.layers[index].name = editingName
+                                        document.layers[actualIndex].name = editingName
                                     }
                                     editingLayerId = nil
                                 },
                                 onDelete: {
-                                    document.deleteLayer(at: index)
+                                    document.deleteLayer(at: actualIndex)
                                 }
                             )
                         }
@@ -153,10 +154,6 @@ struct LayerRow: View {
                 onStartEditing()
             }
 
-            Button("複製") {
-                // TODO: 複製機能
-            }
-
             Button("削除", role: .destructive) {
                 onDelete()
             }
@@ -167,12 +164,20 @@ struct LayerRow: View {
 /// レイヤサムネイル（キャッシュ機能付き）
 struct LayerThumbnail: View {
     let layer: Layer
-    @State private var cachedImage: UIImage?
-    @State private var cachedVersion: Int = -1
+    @StateObject private var cache: ThumbnailCache
+    
+    init(layer: Layer) {
+        self.layer = layer
+        _cache = StateObject(wrappedValue: ThumbnailCache(layer: layer))
+    }
 
     var body: some View {
         GeometryReader { geometry in
-            if let image = getThumbnail(size: geometry.size) {
+            Color.clear.preference(
+                key: SizePreferenceKey.self,
+                value: geometry.size
+            )
+            if let image = cache.cachedImage {
                 Image(uiImage: image)
                     .resizable()
                     .aspectRatio(contentMode: .fit)
@@ -181,37 +186,55 @@ struct LayerThumbnail: View {
                     .fill(Color(.systemGray5))
             }
         }
+        .onPreferenceChange(SizePreferenceKey.self) { size in
+            cache.updateIfNeeded(layer: layer, size: size)
+        }
+        .onChange(of: layer.version) { _ in
+            // Trigger update when layer version changes
+        }
         .overlay(
             RoundedRectangle(cornerRadius: 4)
                 .stroke(Color.gray.opacity(0.3), lineWidth: 1)
         )
         .opacity(layer.isVisible ? layer.opacity : 0.5)
     }
+}
 
-    private func getThumbnail(size: CGSize) -> UIImage? {
-        // バージョンが変わっていない場合はキャッシュを使用
-        if cachedVersion == layer.version, let cached = cachedImage {
-            return cached
-        }
-        
-        // サムネイルを生成
-        let thumbnail = renderThumbnail(size: size)
-        cachedImage = thumbnail
-        cachedVersion = layer.version
-        return thumbnail
+private struct SizePreferenceKey: PreferenceKey {
+    static var defaultValue: CGSize = .zero
+    static func reduce(value: inout CGSize, nextValue: () -> CGSize) {
+        value = nextValue()
     }
+}
+}
 
-    private func renderThumbnail(size: CGSize) -> UIImage? {
+/// レイヤサムネイルのキャッシュ管理
+private class ThumbnailCache: ObservableObject {
+    @Published var cachedImage: UIImage?
+    private var cachedVersion: Int = -1
+    private var lastSize: CGSize = .zero
+    
+    init(layer: Layer) {
+        // 初期化時に最初のバージョンを記録
+        self.cachedVersion = layer.version
+    }
+    
+    func updateIfNeeded(layer: Layer, size: CGSize) {
+        // バージョンまたはサイズが変わった場合のみ更新
+        guard cachedVersion != layer.version || lastSize != size else { return }
+        
+        cachedImage = renderThumbnail(layer: layer, size: size)
+        cachedVersion = layer.version
+        lastSize = size
+    }
+    
+    private func renderThumbnail(layer: Layer, size: CGSize) -> UIImage? {
         let drawing = layer.drawing
         guard !drawing.bounds.isEmpty else { return nil }
 
         let scale = min(
             size.width / drawing.bounds.width,
             size.height / drawing.bounds.height
-        )
-        let thumbnailSize = CGSize(
-            width: drawing.bounds.width * scale,
-            height: drawing.bounds.height * scale
         )
 
         return drawing.image(from: drawing.bounds, scale: scale)

@@ -218,33 +218,65 @@ struct CanvasScreen: View {
 struct LayerImageView: View {
     let layer: Layer
     let canvasSize: CGSize
-    @State private var cachedImage: UIImage?
-    @State private var cachedVersion: Int = -1
+    @StateObject private var cache: LayerImageCache
+    
+    init(layer: Layer, canvasSize: CGSize) {
+        self.layer = layer
+        self.canvasSize = canvasSize
+        _cache = StateObject(wrappedValue: LayerImageCache(layer: layer, canvasSize: canvasSize))
+    }
 
     var body: some View {
         GeometryReader { geometry in
-            if let image = getImage(size: geometry.size) {
+            Color.clear.preference(
+                key: SizePreferenceKey.self,
+                value: geometry.size
+            )
+            if let image = cache.cachedImage {
                 Image(uiImage: image)
                     .resizable()
                     .aspectRatio(contentMode: .fit)
             }
         }
-    }
-
-    private func getImage(size: CGSize) -> UIImage? {
-        // バージョンが変わっていない場合はキャッシュを使用
-        if cachedVersion == layer.version, let cached = cachedImage {
-            return cached
+        .onPreferenceChange(SizePreferenceKey.self) { size in
+            cache.updateIfNeeded(layer: layer, size: size)
         }
-        
-        // 画像を生成
-        let image = renderImage(size: size)
-        cachedImage = image
-        cachedVersion = layer.version
-        return image
+        .onChange(of: layer.version) { _ in
+            // Trigger update when layer version changes
+        }
     }
+}
 
-    private func renderImage(size: CGSize) -> UIImage? {
+private struct SizePreferenceKey: PreferenceKey {
+    static var defaultValue: CGSize = .zero
+    static func reduce(value: inout CGSize, nextValue: () -> CGSize) {
+        value = nextValue()
+    }
+}
+}
+
+/// レイヤ画像のキャッシュ管理
+private class LayerImageCache: ObservableObject {
+    @Published var cachedImage: UIImage?
+    private var cachedVersion: Int = -1
+    private var lastSize: CGSize = .zero
+    private let canvasSize: CGSize
+    
+    init(layer: Layer, canvasSize: CGSize) {
+        self.canvasSize = canvasSize
+        self.cachedVersion = layer.version
+    }
+    
+    func updateIfNeeded(layer: Layer, size: CGSize) {
+        // バージョンまたはサイズが変わった場合のみ更新
+        guard cachedVersion != layer.version || lastSize != size else { return }
+        
+        cachedImage = renderImage(layer: layer, size: size)
+        cachedVersion = layer.version
+        lastSize = size
+    }
+    
+    private func renderImage(layer: Layer, size: CGSize) -> UIImage? {
         let drawing = layer.drawing
         guard !drawing.bounds.isEmpty else { return nil }
 

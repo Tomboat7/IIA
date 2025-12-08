@@ -68,13 +68,22 @@ struct CanvasView: UIViewRepresentable {
         var parent: CanvasView
         var isDrawing = false
         var lastLayerVersion: Int = -1
+        private var drawingChangedWorkItem: DispatchWorkItem?
 
         init(_ parent: CanvasView) {
             self.parent = parent
         }
 
         func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) {
-            parent.onDrawingChanged?(canvasView.drawing)
+            // Debounce the onDrawingChanged callback to avoid excessive updates
+            drawingChangedWorkItem?.cancel()
+            let drawing = canvasView.drawing
+            let workItem = DispatchWorkItem { [weak self] in
+                guard let self = self else { return }
+                self.parent.onDrawingChanged?(drawing)
+            }
+            drawingChangedWorkItem = workItem
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1, execute: workItem)
         }
 
         func canvasViewDidBeginUsingTool(_ canvasView: PKCanvasView) {

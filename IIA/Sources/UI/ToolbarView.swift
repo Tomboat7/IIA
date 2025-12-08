@@ -11,11 +11,11 @@ struct ToolbarView: View {
     @ObservedObject var brushSettings: BrushSettings
     @ObservedObject var document: IllustrationDocument
     @Binding var selectedTool: SelectedTool
-    var axis: Axis = .vertical // 配置方向
+    var axis: ToolbarAxis = .vertical // 配置方向
     @State private var showColorPicker = false
     @State private var showBrushSettings = false
     
-    enum Axis {
+    enum ToolbarAxis {
         case vertical
         case horizontal
     }

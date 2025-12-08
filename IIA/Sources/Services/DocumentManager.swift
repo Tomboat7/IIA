@@ -9,8 +9,8 @@ class DocumentManager: NSObject, ObservableObject {
     private let documentsDirectory: URL
     private var saveToPhotoLibraryCompletion: ((Bool, Error?) -> Void)?
     
-    // サムネイルキャッシュ
-    private var thumbnailCache: [UUID: UIImage] = [:]
+    // サムネイルキャッシュ (NSCache で自動的にメモリ管理)
+    private let thumbnailCache = NSCache<NSString, UIImage>()
     private let thumbnailSize = CGSize(width: 120, height: 120)
 
     override init() {
@@ -234,8 +234,10 @@ class DocumentManager: NSObject, ObservableObject {
     
     /// ドキュメントのサムネイルを生成（キャッシュあり）
     func generateThumbnail(for document: IllustrationDocument) -> UIImage? {
+        let cacheKey = document.id.uuidString as NSString
+        
         // キャッシュをチェック
-        if let cached = thumbnailCache[document.id] {
+        if let cached = thumbnailCache.object(forKey: cacheKey) {
             return cached
         }
         
@@ -271,52 +273,12 @@ class DocumentManager: NSObject, ObservableObject {
         }
         
         // キャッシュに保存
-        thumbnailCache[document.id] = thumbnail
+        thumbnailCache.setObject(thumbnail, forKey: cacheKey)
         return thumbnail
     }
     
     /// サムネイルキャッシュを無効化
     func invalidateThumbnail(for documentId: UUID) {
-        thumbnailCache.removeValue(forKey: documentId)
-    }
-}
-
-// MARK: - Thumbnail Generation
-
-extension DocumentManager {
-    /// サムネイルを生成
-    func generateThumbnail(for document: IllustrationDocument, size: CGSize) -> UIImage? {
-        let scale = min(
-            size.width / document.canvasSize.width,
-            size.height / document.canvasSize.height
-        )
-        let thumbnailSize = CGSize(
-            width: document.canvasSize.width * scale,
-            height: document.canvasSize.height * scale
-        )
-
-        let renderer = UIGraphicsImageRenderer(size: thumbnailSize)
-
-        return renderer.image { context in
-            // 背景
-            UIColor(document.backgroundColor).setFill()
-            context.fill(CGRect(origin: .zero, size: thumbnailSize))
-
-            // 各レイヤを描画
-            for layer in document.layers where layer.isVisible {
-                let drawing = layer.drawing
-                if !drawing.bounds.isEmpty {
-                    let layerImage = drawing.image(
-                        from: CGRect(origin: .zero, size: document.canvasSize),
-                        scale: scale
-                    )
-                    layerImage.draw(
-                        in: CGRect(origin: .zero, size: thumbnailSize),
-                        blendMode: .normal,
-                        alpha: CGFloat(layer.opacity)
-                    )
-                }
-            }
-        }
+        thumbnailCache.removeObject(forKey: documentId.uuidString as NSString)
     }
 }
