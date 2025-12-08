@@ -251,19 +251,34 @@ struct CanvasScreen: View {
     }
 }
 
-/// レイヤを画像として表示するビュー
+/// レイヤを画像として表示するビュー（キャッシュ機能付き）
 struct LayerImageView: View {
     let layer: Layer
     let canvasSize: CGSize
+    @State private var cachedImage: UIImage?
+    @State private var cachedVersion: Int = -1
 
     var body: some View {
         GeometryReader { geometry in
-            if let image = renderImage(size: geometry.size) {
+            if let image = getImage(size: geometry.size) {
                 Image(uiImage: image)
                     .resizable()
                     .aspectRatio(contentMode: .fit)
             }
         }
+    }
+
+    private func getImage(size: CGSize) -> UIImage? {
+        // バージョンが変わっていない場合はキャッシュを使用
+        if cachedVersion == layer.version, let cached = cachedImage {
+            return cached
+        }
+        
+        // 画像を生成
+        let image = renderImage(size: size)
+        cachedImage = image
+        cachedVersion = layer.version
+        return image
     }
 
     private func renderImage(size: CGSize) -> UIImage? {

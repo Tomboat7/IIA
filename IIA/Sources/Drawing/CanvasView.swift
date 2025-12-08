@@ -38,11 +38,12 @@ struct CanvasView: UIViewRepresentable {
         canvasView.backgroundColor = UIColor(document.backgroundColor)
 
         // レイヤが変更された場合、描画を更新
-        // 注意: 描画中の更新は避ける
+        // バージョン比較でパフォーマンスを改善
         if !context.coordinator.isDrawing {
             if let activeLayer = document.activeLayer {
-                if canvasView.drawing.dataRepresentation() != activeLayer.drawingData {
+                if context.coordinator.lastLayerVersion != activeLayer.version {
                     canvasView.drawing = activeLayer.drawing
+                    context.coordinator.lastLayerVersion = activeLayer.version
                 }
             }
         }
@@ -66,6 +67,7 @@ struct CanvasView: UIViewRepresentable {
     class Coordinator: NSObject, PKCanvasViewDelegate {
         var parent: CanvasView
         var isDrawing = false
+        var lastLayerVersion: Int = -1
 
         init(_ parent: CanvasView) {
             self.parent = parent
@@ -84,6 +86,11 @@ struct CanvasView: UIViewRepresentable {
             // 描画終了時に Undo 状態を保存
             parent.document.saveUndoState()
             parent.document.updateActiveLayerDrawing(canvasView.drawing)
+            
+            // バージョンを更新
+            if let activeLayer = parent.document.activeLayer {
+                lastLayerVersion = activeLayer.version
+            }
         }
     }
 }

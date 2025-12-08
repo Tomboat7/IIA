@@ -8,6 +8,10 @@ class DocumentManager: NSObject, ObservableObject {
     private let fileManager = FileManager.default
     private let documentsDirectory: URL
     private var saveToPhotoLibraryCompletion: ((Bool, Error?) -> Void)?
+    
+    // サムネイルキャッシュ
+    private var thumbnailCache: [UUID: UIImage] = [:]
+    private let thumbnailSize = CGSize(width: 120, height: 120)
 
     override init() {
         // Documents ディレクトリを取得
@@ -224,6 +228,56 @@ class DocumentManager: NSObject, ObservableObject {
             saveToPhotoLibraryCompletion?(true, nil)
         }
         saveToPhotoLibraryCompletion = nil
+    }
+    
+    // MARK: - Thumbnail
+    
+    /// ドキュメントのサムネイルを生成（キャッシュあり）
+    func generateThumbnail(for document: IllustrationDocument) -> UIImage? {
+        // キャッシュをチェック
+        if let cached = thumbnailCache[document.id] {
+            return cached
+        }
+        
+        // サムネイルを生成
+        let scale = min(
+            thumbnailSize.width / document.canvasSize.width,
+            thumbnailSize.height / document.canvasSize.height
+        )
+        let size = CGSize(
+            width: document.canvasSize.width * scale,
+            height: document.canvasSize.height * scale
+        )
+        
+        let renderer = UIGraphicsImageRenderer(size: size)
+        let thumbnail = renderer.image { context in
+            // 背景色
+            UIColor(document.backgroundColor).setFill()
+            context.fill(CGRect(origin: .zero, size: size))
+            
+            // 各レイヤを描画
+            for layer in document.layers where layer.isVisible {
+                let drawing = layer.drawing
+                let layerImage = drawing.image(
+                    from: CGRect(origin: .zero, size: document.canvasSize),
+                    scale: scale
+                )
+                layerImage.draw(
+                    in: CGRect(origin: .zero, size: size),
+                    blendMode: .normal,
+                    alpha: CGFloat(layer.opacity)
+                )
+            }
+        }
+        
+        // キャッシュに保存
+        thumbnailCache[document.id] = thumbnail
+        return thumbnail
+    }
+    
+    /// サムネイルキャッシュを無効化
+    func invalidateThumbnail(for documentId: UUID) {
+        thumbnailCache.removeValue(forKey: documentId)
     }
 }
 
