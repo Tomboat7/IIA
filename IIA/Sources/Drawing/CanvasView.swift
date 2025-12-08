@@ -77,9 +77,10 @@ struct CanvasView: UIViewRepresentable {
         func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) {
             // Debounce the onDrawingChanged callback to avoid excessive updates
             drawingChangedWorkItem?.cancel()
+            let drawing = canvasView.drawing
             let workItem = DispatchWorkItem { [weak self] in
                 guard let self = self else { return }
-                self.parent.onDrawingChanged?(canvasView.drawing)
+                self.parent.onDrawingChanged?(drawing)
             }
             drawingChangedWorkItem = workItem
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1, execute: workItem)

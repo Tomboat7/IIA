@@ -173,7 +173,10 @@ struct LayerThumbnail: View {
 
     var body: some View {
         GeometryReader { geometry in
-            let _ = cache.updateIfNeeded(layer: layer, size: geometry.size)
+            Color.clear.preference(
+                key: SizePreferenceKey.self,
+                value: geometry.size
+            )
             if let image = cache.cachedImage {
                 Image(uiImage: image)
                     .resizable()
@@ -183,12 +186,26 @@ struct LayerThumbnail: View {
                     .fill(Color(.systemGray5))
             }
         }
+        .onPreferenceChange(SizePreferenceKey.self) { size in
+            cache.updateIfNeeded(layer: layer, size: size)
+        }
+        .onChange(of: layer.version) { _ in
+            // Trigger update when layer version changes
+        }
         .overlay(
             RoundedRectangle(cornerRadius: 4)
                 .stroke(Color.gray.opacity(0.3), lineWidth: 1)
         )
         .opacity(layer.isVisible ? layer.opacity : 0.5)
     }
+}
+
+private struct SizePreferenceKey: PreferenceKey {
+    static var defaultValue: CGSize = .zero
+    static func reduce(value: inout CGSize, nextValue: () -> CGSize) {
+        value = nextValue()
+    }
+}
 }
 
 /// レイヤサムネイルのキャッシュ管理

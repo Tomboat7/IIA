@@ -228,14 +228,31 @@ struct LayerImageView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            let _ = cache.updateIfNeeded(layer: layer, size: geometry.size)
+            Color.clear.preference(
+                key: SizePreferenceKey.self,
+                value: geometry.size
+            )
             if let image = cache.cachedImage {
                 Image(uiImage: image)
                     .resizable()
                     .aspectRatio(contentMode: .fit)
             }
         }
+        .onPreferenceChange(SizePreferenceKey.self) { size in
+            cache.updateIfNeeded(layer: layer, size: size)
+        }
+        .onChange(of: layer.version) { _ in
+            // Trigger update when layer version changes
+        }
     }
+}
+
+private struct SizePreferenceKey: PreferenceKey {
+    static var defaultValue: CGSize = .zero
+    static func reduce(value: inout CGSize, nextValue: () -> CGSize) {
+        value = nextValue()
+    }
+}
 }
 
 /// レイヤ画像のキャッシュ管理
