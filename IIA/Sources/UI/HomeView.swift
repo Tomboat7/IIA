@@ -1,8 +1,19 @@
 import SwiftUI
 
+// MARK: - Future Improvements
+// TODO: 大規模リファクタリング時にサブビューを別ファイルに分割（CanvasSizeSelectionSheet.swift, RecentDocumentsSheet.swift）
+// Note: UI要素のサイズ（padding、corner radius等）はApple HIGに沿った標準値のため定数化せず維持
+
 /// ホーム画面
 /// 新規作成・続きから描く・インポート・エクスポートなどの起点
 struct HomeView: View {
+    // MARK: - Constants
+
+    /// ホーム画面に表示する最近のドキュメント数
+    private static let recentDocumentsDisplayCount = 5
+
+    // MARK: - Properties
+
     @EnvironmentObject var documentManager: DocumentManager
     @State private var showCanvasSizeSheet = false
     @State private var selectedDocument: IllustrationDocument?
@@ -55,7 +66,7 @@ struct HomeView: View {
 
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 16) {
-                                ForEach(documentManager.recentDocuments.prefix(5)) { doc in
+                                ForEach(documentManager.recentDocuments.prefix(Self.recentDocumentsDisplayCount)) { doc in
                                     RecentDocumentCard(document: doc) {
                                         selectedDocument = doc
                                         navigateToCanvas = true

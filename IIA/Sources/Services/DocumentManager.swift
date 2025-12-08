@@ -1,17 +1,30 @@
 import Foundation
 import SwiftUI
 
+// MARK: - Future Improvements
+// TODO: テストコードの追加 - 保存/読み込み機能、サムネイル生成のユニットテスト
+// TODO: 大規模リファクタリング時にファイル分割を検討（Export機能、Thumbnail機能を別クラスに）
+// Note: print文によるログ出力は個人利用アプリのため許容。将来的にはos.logへの移行を検討
+
 /// ドキュメントの保存・読み込み・管理を行うクラス
 class DocumentManager: NSObject, ObservableObject {
     @Published var recentDocuments: [IllustrationDocument] = []
 
     private let fileManager = FileManager.default
     private let documentsDirectory: URL
+    /// 写真ライブラリ保存時のコールバック（@objcメソッドで使用するため保持）
+    /// Note: UIImageWriteToSavedPhotosAlbumのコールバックがselfを参照するため、
+    /// 完了時にnilにセットすることでメモリリークを防止
     private var saveToPhotoLibraryCompletion: ((Bool, Error?) -> Void)?
-    
-    // サムネイルキャッシュ (NSCache で自動的にメモリ管理)
+
+    // MARK: - Constants
+
+    /// サムネイルキャッシュ (NSCache で自動的にメモリ管理)
     private let thumbnailCache = NSCache<NSString, UIImage>()
-    private let thumbnailSize = CGSize(width: 120, height: 120)
+    private static let thumbnailWidth: CGFloat = 120
+    private static let thumbnailHeight: CGFloat = 120
+    /// 最近のドキュメント最大保持数
+    private static let maxRecentDocuments = 50
 
     override init() {
         // Documents ディレクトリを取得
@@ -141,55 +154,30 @@ class DocumentManager: NSObject, ObservableObject {
         documentsDirectory.appendingPathComponent("\(id.uuidString).iia")
     }
 
-    /// ドキュメントを更新日時順にソート
+    /// ドキュメントを更新日時順にソートし、上限を超えたドキュメントを削除
     private func sortDocuments() {
         recentDocuments.sort { $0.updatedAt > $1.updatedAt }
+
+        // 上限を超えた古いドキュメントを削除
+        if recentDocuments.count > Self.maxRecentDocuments {
+            let documentsToRemove = recentDocuments[Self.maxRecentDocuments...]
+            for doc in documentsToRemove {
+                let fileURL = documentURL(for: doc.id)
+                try? fileManager.removeItem(at: fileURL)
+            }
+            recentDocuments = Array(recentDocuments.prefix(Self.maxRecentDocuments))
+        }
     }
 
     // MARK: - Export
-    
+
     enum ExportFormat {
         case png
         case jpeg(quality: CGFloat)
     }
 
-    /// ドキュメントを画像として書き出し
-    func exportAsImage(document: IllustrationDocument, format: ExportFormat, includeBackground: Bool = true) -> Data? {
-        let renderer = UIGraphicsImageRenderer(size: document.canvasSize)
-
-        let image = renderer.image { context in
-            // 背景
-            if includeBackground {
-                UIColor(document.backgroundColor).setFill()
-                context.fill(CGRect(origin: .zero, size: document.canvasSize))
-            }
-
-            // 各レイヤを描画
-            for layer in document.layers where layer.isVisible {
-                let drawing = layer.drawing
-                let layerImage = drawing.image(
-                    from: CGRect(origin: .zero, size: document.canvasSize),
-                    scale: 1.0
-                )
-                layerImage.draw(
-                    in: CGRect(origin: .zero, size: document.canvasSize),
-                    blendMode: .normal,
-                    alpha: CGFloat(layer.opacity)
-                )
-            }
-        }
-        
-        // フォーマットに応じてデータを生成
-        switch format {
-        case .png:
-            return image.pngData()
-        case .jpeg(let quality):
-            return image.jpegData(compressionQuality: quality)
-        }
-    }
-    
-    /// ドキュメントを UIImage として書き出し（共有用）
-    func exportAsUIImage(document: IllustrationDocument, includeBackground: Bool = true) -> UIImage? {
+    /// ドキュメントを画像としてレンダリング（共通処理）
+    private func renderDocument(_ document: IllustrationDocument, includeBackground: Bool, scale: CGFloat = 1.0) -> UIImage {
         let renderer = UIGraphicsImageRenderer(size: document.canvasSize)
 
         return renderer.image { context in
@@ -204,7 +192,7 @@ class DocumentManager: NSObject, ObservableObject {
                 let drawing = layer.drawing
                 let layerImage = drawing.image(
                     from: CGRect(origin: .zero, size: document.canvasSize),
-                    scale: 1.0
+                    scale: scale
                 )
                 layerImage.draw(
                     in: CGRect(origin: .zero, size: document.canvasSize),
@@ -213,6 +201,24 @@ class DocumentManager: NSObject, ObservableObject {
                 )
             }
         }
+    }
+
+    /// ドキュメントを画像として書き出し
+    func exportAsImage(document: IllustrationDocument, format: ExportFormat, includeBackground: Bool = true) -> Data? {
+        let image = renderDocument(document, includeBackground: includeBackground)
+
+        // フォーマットに応じてデータを生成
+        switch format {
+        case .png:
+            return image.pngData()
+        case .jpeg(let quality):
+            return image.jpegData(compressionQuality: quality)
+        }
+    }
+
+    /// ドキュメントを UIImage として書き出し（共有用）
+    func exportAsUIImage(document: IllustrationDocument, includeBackground: Bool = true) -> UIImage? {
+        return renderDocument(document, includeBackground: includeBackground)
     }
 
     /// 画像を写真ライブラリに保存
@@ -235,16 +241,16 @@ class DocumentManager: NSObject, ObservableObject {
     /// ドキュメントのサムネイルを生成（キャッシュあり）
     func generateThumbnail(for document: IllustrationDocument) -> UIImage? {
         let cacheKey = document.id.uuidString as NSString
-        
+
         // キャッシュをチェック
         if let cached = thumbnailCache.object(forKey: cacheKey) {
             return cached
         }
-        
+
         // サムネイルを生成
         let scale = min(
-            thumbnailSize.width / document.canvasSize.width,
-            thumbnailSize.height / document.canvasSize.height
+            Self.thumbnailWidth / document.canvasSize.width,
+            Self.thumbnailHeight / document.canvasSize.height
         )
         let size = CGSize(
             width: document.canvasSize.width * scale,

@@ -3,6 +3,17 @@ import PencilKit
 
 /// レイヤパネル（右下に配置、開閉可能）
 struct LayerListView: View {
+    // MARK: - Constants
+
+    /// 最大レイヤ数
+    private static let maxLayers = 20
+    /// パネルの幅
+    private static let panelWidth: CGFloat = 200
+    /// レイヤリストの最大高さ
+    private static let maxListHeight: CGFloat = 200
+
+    // MARK: - Properties
+
     @ObservedObject var document: IllustrationDocument
     @Binding var isExpanded: Bool
     @State private var editingLayerId: UUID?
@@ -23,7 +34,7 @@ struct LayerListView: View {
                     Image(systemName: "plus")
                         .font(.system(size: 16))
                 }
-                .disabled(document.layers.count >= 20) // 最大20レイヤ
+                .disabled(document.layers.count >= Self.maxLayers)
 
                 // 展開/折りたたみボタン
                 Button(action: { withAnimation { isExpanded.toggle() } }) {
@@ -76,7 +87,7 @@ struct LayerListView: View {
                     }
                     .padding(.vertical, 4)
                 }
-                .frame(maxHeight: 200)
+                .frame(maxHeight: Self.maxListHeight)
             }
         }
         .background(
@@ -84,7 +95,7 @@ struct LayerListView: View {
                 .fill(Color(.systemBackground))
                 .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: -2)
         )
-        .frame(width: 200)
+        .frame(width: Self.panelWidth)
     }
 
     private func binding(for index: Int) -> Binding<Layer> {
@@ -165,7 +176,8 @@ struct LayerRow: View {
 struct LayerThumbnail: View {
     let layer: Layer
     @StateObject private var cache: ThumbnailCache
-    
+    @State private var currentSize: CGSize = .zero
+
     init(layer: Layer) {
         self.layer = layer
         _cache = StateObject(wrappedValue: ThumbnailCache(layer: layer))
@@ -187,10 +199,12 @@ struct LayerThumbnail: View {
             }
         }
         .onPreferenceChange(SizePreferenceKey.self) { size in
+            currentSize = size
             cache.updateIfNeeded(layer: layer, size: size)
         }
         .onChange(of: layer.version) { _ in
-            // Trigger update when layer version changes
+            // レイヤのバージョンが変わったらキャッシュを強制更新
+            cache.updateIfNeeded(layer: layer, size: currentSize)
         }
         .overlay(
             RoundedRectangle(cornerRadius: 4)
@@ -200,13 +214,7 @@ struct LayerThumbnail: View {
     }
 }
 
-private struct SizePreferenceKey: PreferenceKey {
-    static var defaultValue: CGSize = .zero
-    static func reduce(value: inout CGSize, nextValue: () -> CGSize) {
-        value = nextValue()
-    }
-}
-}
+// Note: SizePreferenceKey is defined in CanvasScreen.swift and shared across views
 
 /// レイヤサムネイルのキャッシュ管理
 private class ThumbnailCache: ObservableObject {

@@ -2,9 +2,26 @@ import Foundation
 import SwiftUI
 import PencilKit
 
+// MARK: - Future Improvements
+// TODO: テストコードの追加 - Undo/Redo ロジック、Codable 実装のユニットテスト
+// Note: 日本語文字列はCLAUDE.mdの方針により多言語対応は不要、ハードコードを維持
+
 /// イラストドキュメント全体を表すモデル
 /// キャンバスの状態、レイヤ、設定などを管理
 class IllustrationDocument: ObservableObject, Identifiable, Codable {
+    // MARK: - Constants
+
+    /// 最大Undo回数
+    static let maxUndoCount = 50
+    /// デフォルトキャンバスサイズ
+    static let defaultCanvasSize = CGSize(width: 2048, height: 2048)
+    /// デフォルト新規ドキュメント名
+    static let defaultDocumentName = "新規イラスト"
+    /// デフォルトレイヤ名
+    static let defaultLayerName = "レイヤ"
+
+    // MARK: - Properties
+
     let id: UUID
     @Published var name: String
     @Published var canvasSize: CGSize
@@ -22,19 +39,18 @@ class IllustrationDocument: ObservableObject, Identifiable, Codable {
 
     private var undoStack: [DocumentState] = []
     private var redoStack: [DocumentState] = []
-    private let maxUndoCount = 50
 
     init(
         id: UUID = UUID(),
-        name: String = "新規イラスト",
-        canvasSize: CGSize = CGSize(width: 2048, height: 2048),
+        name: String = Self.defaultDocumentName,
+        canvasSize: CGSize = Self.defaultCanvasSize,
         backgroundColor: Color = .white
     ) {
         self.id = id
         self.name = name
         self.canvasSize = canvasSize
         self.backgroundColor = backgroundColor
-        self.layers = [Layer(name: "レイヤ 1")]
+        self.layers = [Layer(name: "\(Self.defaultLayerName) 1")]
         self.activeLayerIndex = 0
         self.createdAt = Date()
         self.updatedAt = Date()
@@ -77,11 +93,14 @@ class IllustrationDocument: ObservableObject, Identifiable, Codable {
 
         let uiColor = UIColor(backgroundColor)
         var red: CGFloat = 0, green: CGFloat = 0, blue: CGFloat = 0, alpha: CGFloat = 0
-        uiColor.getRed(&red, green: &green, blue: &blue, alpha: &alpha)
-        try container.encode(Double(red), forKey: .backgroundColorRed)
-        try container.encode(Double(green), forKey: .backgroundColorGreen)
-        try container.encode(Double(blue), forKey: .backgroundColorBlue)
-        try container.encode(Double(alpha), forKey: .backgroundColorAlpha)
+        // getRed は色空間によっては失敗する可能性があるが、その場合はデフォルト値（0）を使用
+        // Note: SwiftUI Color → UIColor の変換では通常成功する
+        _ = uiColor.getRed(&red, green: &green, blue: &blue, alpha: &alpha)
+        // 有効範囲（0.0-1.0）内にクランプ
+        try container.encode(Double(max(0, min(1, red))), forKey: .backgroundColorRed)
+        try container.encode(Double(max(0, min(1, green))), forKey: .backgroundColorGreen)
+        try container.encode(Double(max(0, min(1, blue))), forKey: .backgroundColorBlue)
+        try container.encode(Double(max(0, min(1, alpha))), forKey: .backgroundColorAlpha)
 
         try container.encode(layers, forKey: .layers)
         try container.encode(activeLayerIndex, forKey: .activeLayerIndex)
@@ -100,7 +119,7 @@ class IllustrationDocument: ObservableObject, Identifiable, Codable {
     /// 新しいレイヤを追加
     func addLayer() {
         saveUndoState()
-        let newLayer = Layer(name: "レイヤ \(layers.count + 1)")
+        let newLayer = Layer(name: "\(Self.defaultLayerName) \(layers.count + 1)")
         layers.insert(newLayer, at: activeLayerIndex + 1)
         activeLayerIndex += 1
         updatedAt = Date()
@@ -136,7 +155,7 @@ class IllustrationDocument: ObservableObject, Identifiable, Codable {
     /// 現在の状態を Undo スタックに保存
     func saveUndoState() {
         undoStack.append(DocumentState(layers: layers, activeLayerIndex: activeLayerIndex))
-        if undoStack.count > maxUndoCount {
+        if undoStack.count > Self.maxUndoCount {
             undoStack.removeFirst()
         }
         redoStack.removeAll()
@@ -147,7 +166,12 @@ class IllustrationDocument: ObservableObject, Identifiable, Codable {
         guard let previousState = undoStack.popLast() else { return }
         redoStack.append(DocumentState(layers: layers, activeLayerIndex: activeLayerIndex))
         layers = previousState.layers
-        activeLayerIndex = min(max(0, previousState.activeLayerIndex), max(0, layers.count - 1))
+        // 空配列の場合は0、それ以外は有効範囲内に収める
+        if layers.isEmpty {
+            activeLayerIndex = 0
+        } else {
+            activeLayerIndex = min(max(0, previousState.activeLayerIndex), layers.count - 1)
+        }
         updatedAt = Date()
     }
 
@@ -156,7 +180,12 @@ class IllustrationDocument: ObservableObject, Identifiable, Codable {
         guard let nextState = redoStack.popLast() else { return }
         undoStack.append(DocumentState(layers: layers, activeLayerIndex: activeLayerIndex))
         layers = nextState.layers
-        activeLayerIndex = min(max(0, nextState.activeLayerIndex), max(0, layers.count - 1))
+        // 空配列の場合は0、それ以外は有効範囲内に収める
+        if layers.isEmpty {
+            activeLayerIndex = 0
+        } else {
+            activeLayerIndex = min(max(0, nextState.activeLayerIndex), layers.count - 1)
+        }
         updatedAt = Date()
     }
 
