@@ -2,13 +2,14 @@ import Foundation
 import SwiftUI
 
 /// ドキュメントの保存・読み込み・管理を行うクラス
-class DocumentManager: ObservableObject {
+class DocumentManager: NSObject, ObservableObject {
     @Published var recentDocuments: [IllustrationDocument] = []
 
     private let fileManager = FileManager.default
     private let documentsDirectory: URL
+    private var saveToPhotoLibraryCompletion: ((Bool, Error?) -> Void)?
 
-    init() {
+    override init() {
         // Documents ディレクトリを取得
         documentsDirectory = fileManager.urls(for: .documentDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("IIADocuments", isDirectory: true)
@@ -142,9 +143,49 @@ class DocumentManager: ObservableObject {
     }
 
     // MARK: - Export
+    
+    enum ExportFormat {
+        case png
+        case jpeg(quality: CGFloat)
+    }
 
-    /// ドキュメントを PNG 画像として書き出し
-    func exportAsPNG(document: IllustrationDocument, includeBackground: Bool = true) -> UIImage? {
+    /// ドキュメントを画像として書き出し
+    func exportAsImage(document: IllustrationDocument, format: ExportFormat, includeBackground: Bool = true) -> Data? {
+        let renderer = UIGraphicsImageRenderer(size: document.canvasSize)
+
+        let image = renderer.image { context in
+            // 背景
+            if includeBackground {
+                UIColor(document.backgroundColor).setFill()
+                context.fill(CGRect(origin: .zero, size: document.canvasSize))
+            }
+
+            // 各レイヤを描画
+            for layer in document.layers where layer.isVisible {
+                let drawing = layer.drawing
+                let layerImage = drawing.image(
+                    from: CGRect(origin: .zero, size: document.canvasSize),
+                    scale: 1.0
+                )
+                layerImage.draw(
+                    in: CGRect(origin: .zero, size: document.canvasSize),
+                    blendMode: .normal,
+                    alpha: CGFloat(layer.opacity)
+                )
+            }
+        }
+        
+        // フォーマットに応じてデータを生成
+        switch format {
+        case .png:
+            return image.pngData()
+        case .jpeg(let quality):
+            return image.jpegData(compressionQuality: quality)
+        }
+    }
+    
+    /// ドキュメントを UIImage として書き出し（共有用）
+    func exportAsUIImage(document: IllustrationDocument, includeBackground: Bool = true) -> UIImage? {
         let renderer = UIGraphicsImageRenderer(size: document.canvasSize)
 
         return renderer.image { context in
@@ -172,9 +213,17 @@ class DocumentManager: ObservableObject {
 
     /// 画像を写真ライブラリに保存
     func saveToPhotoLibrary(_ image: UIImage, completion: @escaping (Bool, Error?) -> Void) {
-        UIImageWriteToSavedPhotosAlbum(image, nil, nil, nil)
-        // 注: 実際のアプリでは、保存完了を確認するためのセレクタを使用する
-        completion(true, nil)
+        saveToPhotoLibraryCompletion = completion
+        UIImageWriteToSavedPhotosAlbum(image, self, #selector(image(_:didFinishSavingWithError:contextInfo:)), nil)
+    }
+    
+    @objc private func image(_ image: UIImage, didFinishSavingWithError error: Error?, contextInfo: UnsafeRawPointer) {
+        if let error = error {
+            saveToPhotoLibraryCompletion?(false, error)
+        } else {
+            saveToPhotoLibraryCompletion?(true, nil)
+        }
+        saveToPhotoLibraryCompletion = nil
     }
 }
 

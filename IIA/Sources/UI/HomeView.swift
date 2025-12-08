@@ -260,8 +260,8 @@ struct CanvasSizeSelectionSheet: View {
                         }
                     }
                     .disabled(
-                        Double(customWidth) == nil ||
-                        Double(customHeight) == nil
+                        (Double(customWidth) ?? 0) <= 0 ||
+                        (Double(customHeight) ?? 0) <= 0
                     )
                 }
             }

@@ -286,6 +286,7 @@ struct LayerImageView: View {
 struct ExportSheet: View {
     let document: IllustrationDocument
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject var documentManager: DocumentManager
     @State private var exportFormat: ExportFormat = .png
     @State private var includeBackground = true
     @State private var showShareSheet = false
@@ -346,31 +347,8 @@ struct ExportSheet: View {
     }
 
     private func exportImage() {
-        let renderer = UIGraphicsImageRenderer(size: document.canvasSize)
-
-        let image = renderer.image { context in
-            // 背景
-            if includeBackground {
-                UIColor(document.backgroundColor).setFill()
-                context.fill(CGRect(origin: .zero, size: document.canvasSize))
-            }
-
-            // 各レイヤを描画
-            for layer in document.layers where layer.isVisible {
-                let drawing = layer.drawing
-                let layerImage = drawing.image(
-                    from: CGRect(origin: .zero, size: document.canvasSize),
-                    scale: 1.0
-                )
-                layerImage.draw(
-                    in: CGRect(origin: .zero, size: document.canvasSize),
-                    blendMode: .normal,
-                    alpha: CGFloat(layer.opacity)
-                )
-            }
-        }
-
-        exportedImage = image
+        // DocumentManager のエクスポート機能を使用
+        exportedImage = documentManager.exportAsUIImage(document: document, includeBackground: includeBackground)
         showShareSheet = true
     }
 }
