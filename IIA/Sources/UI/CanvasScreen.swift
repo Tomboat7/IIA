@@ -122,48 +122,11 @@ struct CanvasScreen: View {
             // メイン領域
             VStack(spacing: 0) {
                 // 上部: ツールバー（横向きに配置）
-                HStack(spacing: 12) {
-                    // ブラシ
-                    ToolButton(
-                        systemName: "paintbrush.pointed.fill",
-                        isSelected: selectedTool == .brush,
-                        action: { selectedTool = .brush }
-                    )
-
-                    // 消しゴム
-                    ToolButton(
-                        systemName: "eraser.fill",
-                        isSelected: selectedTool == .eraser,
-                        action: { selectedTool = .eraser }
-                    )
-
-                    Divider().frame(height: 30)
-
-                    // カラー
-                    ColorPicker("", selection: $brushSettings.color)
-                        .labelsHidden()
-                        .frame(width: 32, height: 32)
-
-                    Spacer()
-
-                    // Undo/Redo
-                    ToolButton(
-                        systemName: "arrow.uturn.backward",
-                        isEnabled: document.canUndo,
-                        action: { document.undo() }
-                    )
-
-                    ToolButton(
-                        systemName: "arrow.uturn.forward",
-                        isEnabled: document.canRedo,
-                        action: { document.redo() }
-                    )
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(
-                    Color(.systemBackground)
-                        .shadow(color: .black.opacity(0.1), radius: 2, y: 2)
+                ToolbarView(
+                    brushSettings: brushSettings,
+                    document: document,
+                    selectedTool: $selectedTool,
+                    axis: .horizontal
                 )
 
                 // キャンバス
