@@ -127,7 +127,7 @@ class IllustrationDocument: ObservableObject, Identifiable, Codable {
     /// アクティブレイヤの描画を更新
     func updateActiveLayerDrawing(_ drawing: PKDrawing) {
         guard activeLayerIndex >= 0 && activeLayerIndex < layers.count else { return }
-        layers[activeLayerIndex].drawing = drawing
+        layers[activeLayerIndex].updateDrawing(drawing)
         updatedAt = Date()
     }
 

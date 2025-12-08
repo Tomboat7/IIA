@@ -39,17 +39,18 @@ struct LayerListView: View {
                 // レイヤリスト
                 ScrollView {
                     LazyVStack(spacing: 2) {
-                        ForEach(Array(document.layers.enumerated().reversed()), id: \.element.id) { index, layer in
+                        ForEach(Array(document.layers.enumerated().reversed()), id: \.element.id) { reversedIndex, layer in
+                            let actualIndex = document.layers.count - 1 - reversedIndex
                             LayerRow(
-                                layer: binding(for: index),
-                                isActive: document.activeLayerIndex == index,
+                                layer: binding(for: actualIndex),
+                                isActive: document.activeLayerIndex == actualIndex,
                                 isEditing: editingLayerId == layer.id,
                                 editingName: $editingName,
                                 onSelect: {
-                                    document.activeLayerIndex = index
+                                    document.activeLayerIndex = actualIndex
                                 },
                                 onToggleVisibility: {
-                                    document.layers[index].isVisible.toggle()
+                                    document.layers[actualIndex].isVisible.toggle()
                                 },
                                 onStartEditing: {
                                     editingLayerId = layer.id
@@ -57,12 +58,12 @@ struct LayerListView: View {
                                 },
                                 onEndEditing: {
                                     if !editingName.isEmpty {
-                                        document.layers[index].name = editingName
+                                        document.layers[actualIndex].name = editingName
                                     }
                                     editingLayerId = nil
                                 },
                                 onDelete: {
-                                    document.deleteLayer(at: index)
+                                    document.deleteLayer(at: actualIndex)
                                 }
                             )
                         }
@@ -151,10 +152,6 @@ struct LayerRow: View {
         .contextMenu {
             Button("名前を変更") {
                 onStartEditing()
-            }
-
-            Button("複製") {
-                // TODO: 複製機能
             }
 
             Button("削除", role: .destructive) {

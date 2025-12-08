@@ -28,13 +28,13 @@ struct Layer: Identifiable, Codable {
 
     /// PKDrawing を取得
     var drawing: PKDrawing {
-        get {
-            (try? PKDrawing(data: drawingData)) ?? PKDrawing()
-        }
-        set {
-            drawingData = newValue.dataRepresentation()
-            version += 1
-        }
+        (try? PKDrawing(data: drawingData)) ?? PKDrawing()
+    }
+    
+    /// 描画データを更新し、バージョンをインクリメントする
+    mutating func updateDrawing(_ newDrawing: PKDrawing) {
+        drawingData = newDrawing.dataRepresentation()
+        version += 1
     }
     
     // Codable 用のカスタムキー
